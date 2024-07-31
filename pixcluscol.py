@@ -52,16 +52,16 @@ class InteractivePixCol():
               (self.num_labels,) + self.shape+(3,),
               dtype=int,
               )
-      self.colors = np.zeros(
-              (self.num_labels, 3),
-              dtype=int,
-              )
+      self.palette = [[0,0,0],] * self.num_labels
       self._colbox = None
 
       # get everything ready !
+
       self._make_clus_mask()
-      self._do_precomp()
       self._make_colbox()
+      self._disable_hotkeys()
+
+      self._do_precomp()
       
       self._fig, self._ax, self._img, self._txt = (None,)*4
 
@@ -109,6 +109,11 @@ class InteractivePixCol():
         self._precomp_imgs[i][self._cluster_mask[i]] = [200,200,200]
         #self._precomp_imgs[i][self._cluster_mask[i]] = [223,223,223]
 
+  def _recalc_color_img(self):
+      for i in self.label_indices:
+          self.color_img[self._cluster_mask[i]] = self.palette[i]
+
+
   def drawPlot(self):
       
       self._fig, self._ax = plt.subplots()
@@ -128,7 +133,7 @@ class InteractivePixCol():
 
       def on_motion(event):
           if not self.overFig: return
-          if(self.choosing_color): return
+          if(not (self.choosing_color is None)): return
           
           group_index = self.cluster_img[round(event.ydata),round(event.xdata)] - 1
 
@@ -158,19 +163,26 @@ class InteractivePixCol():
 
       def on_click(event):
         if self.overFig:
-          if self.choosing_color:
-              new_color = self._img.get_cursor_data(event)
-              #dbgmsg(str(new_color))
-              self.color_img[self._cluster_mask[self.choosing_color]] = new_color*256
-              self._img.set(data=self.color_img)
-              self.choosing_color = None
-              # this could be optimized but w/e
-              self._do_precomp()
-              self.label_buf = None
-          else:
+          if self.choosing_color is None:
               self.choosing_color = self.cluster_img[round(event.ydata),round(event.xdata)] - 1
               self._img.set(data=self._colbox)
               self.label_buf = self.label_names[self.choosing_color]
+
+          else:
+              new_color = self._img.get_cursor_data(event)
+
+              # put in palette
+              self.palette[self.choosing_color] = (new_color*256).astype(int).tolist()
+              # recolor in image
+              self.color_img[self._cluster_mask[self.choosing_color]] = new_color*256
+              # show user
+              self._img.set(data=self.color_img)
+              # reset vars
+              self.choosing_color = None
+              self.label_buf = None
+              # recompute higlight imgs
+              # this could be optimized but w/e
+              self._do_precomp()
 
       self._fig.canvas.mpl_connect("button_release_event", on_click)
 
@@ -193,3 +205,25 @@ class InteractivePixCol():
        ############################ ###  #
       ##    end interactivity ### ### ### # #
        ############################ ###  #
+
+  def classif_to_str(self):
+      return str([
+                    list(self.palette),
+                    self.label_names,
+                    (self.cluster_img.flatten()-1).tolist(), # minus 1 to zero indexing
+                ]).replace("'",'"')
+
+  def printClassif(self):
+      print(self.classif_to_str())
+
+  def loadClassif(self, classif):
+      p, l, ci = classif
+
+      self.palette = p
+      self.label_names = l
+      self.cluster_img = np.array(ci).reshape(self.shape) + 1 # plus 1 to one indexing
+
+      self._recalc_color_img()
+      self._img.set(data=self.color_img)
+      self._do_precomp()
+
