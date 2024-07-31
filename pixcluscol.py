@@ -190,11 +190,16 @@ class InteractivePixCol():
           _editing = "(editing)"
           if event.key in( "shift+backspace", "ctrl+backspace", "ctrl+d"):
               self.label_buf = ""
+          elif event.key == "escape":
+              self.choosing_color = None
+              self._img.set(data=self.color_img)
           elif event.key == "backspace":
               self.label_buf = self.label_buf[:-1]
           elif event.key == "enter":
               self.label_names[self.prevGroup] = self.label_buf
               _editing = ""
+              self.choosing_color = None
+              self._img.set(data=self._precomp_imgs[self.prevGroup])
           elif len(event.key)==1:    
               self.label_buf += event.key
           
