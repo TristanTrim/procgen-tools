@@ -56,7 +56,7 @@ class InteractivePixCol():
 
       self._disable_hotkeys()
 
-      self._fig, self._ax, self._img, self._txt = (None,)*4
+      self._fig, self._ax, self._img_plt, self._txt = (None,)*4
       self._colbox = None
       self._make_colbox()
 
@@ -81,12 +81,24 @@ class InteractivePixCol():
       for i in self.label_indices:
         self._cluster_mask[i] = ( 1+i == self.cluster_img )
 
+        if hasattr(self,"_ref_img"):
+            refmask = self._cluster_mask[i]
+            refmask = np.repeat(refmask, self._ref_scale, axis=0)
+            refmask = np.repeat(refmask, self._ref_scale, axis=1)
+            self._ref_cluster_mask[i] = refmask
+
+
   def _do_precomp(self):
       for i in self.label_indices:
         self._precomp_imgs[i] = self.color_img//2+32
 
         self._precomp_imgs[i][self._cluster_mask[i]] = [200,200,200]
         #self._precomp_imgs[i][self._cluster_mask[i]] = [223,223,223]
+        if hasattr(self,"_ref_img"):
+
+            self._ref_precomps[i] = self._ref_img//2+32
+            self._ref_precomps[i][self._ref_cluster_mask[i]] = np.round(
+                    1.4 *  self._ref_precomps[i][self._ref_cluster_mask[i]] ) + 32
 
   def _disable_hotkeys(self):
 
@@ -119,10 +131,45 @@ class InteractivePixCol():
           self.color_img[self._cluster_mask[i]] = self.palette[i]
 
 
-  def drawPlot(self):
+  def drawPlot(self, prev_layer_ref=None):
       
-      self._fig, self._ax = plt.subplots()
-      self._img = self._ax.imshow(self.color_img)
+      if not prev_layer_ref is None:
+
+          # store the img
+          self._ref_img = prev_layer_ref
+
+          # get the scale factor
+          if self._ref_img.shape[0] == self.shape[0] :
+              self._ref_scale = 1
+          elif self._ref_img.shape[0] == 2*self.shape[0] :
+              self._ref_scale = 2
+          else:
+              raise RuntimeError(f"Only supports 1x,2x ref image, not {self.shape} to {self._ref_img[:2]}")
+
+          # make the plot with two axes
+          _fig_ax_ = plt.subplots(1,2)
+          self._fig, (self._ref_ax, self._ax) = _fig_ax_
+          self._ref_img_plt = self._ref_ax.imshow(self._ref_img)
+
+          # struct for highlighting
+          self._ref_cluster_mask = np.full(
+                  (self.num_labels,) + prev_layer_ref.shape[:2],
+                  False,
+                  )
+          self._ref_precomps = np.zeros(
+              (self.num_labels,) + prev_layer_ref.shape,
+              dtype=int,
+              )
+
+          ## TODO this should probs happen once for both
+          self._make_clus_mask()
+          self._do_precomp()
+
+      else:
+
+          self._fig, self._ax = plt.subplots()
+
+      self._img_plt = self._ax.imshow(self.color_img)
 
       self._txt = self._ax.text(0,-2.4,"",
                # color = (1,1,1,0.4),
@@ -143,8 +190,12 @@ class InteractivePixCol():
           group_index = self.cluster_img[round(event.ydata),round(event.xdata)] - 1
 
           if (not group_index == self.prevGroup):
+
               self.prevGroup = group_index
-              self._img.set(data=self._precomp_imgs[group_index])
+
+              self._img_plt.set(data=self._precomp_imgs[group_index])
+              if hasattr(self,"_ref_img_plt"):
+                  self._ref_img_plt.set(data=self._ref_precomps[group_index])
 
               self.label_buf = self.label_names[group_index]
 
@@ -162,7 +213,7 @@ class InteractivePixCol():
       def on_leave_axis(event):
           self.overFig = False
           if not self.choosing_color:
-              self._img.set(data=self.color_img)
+              self._img_plt.set(data=self.color_img)
 
       self._fig.canvas.mpl_connect("axes_leave_event", on_leave_axis)
 
@@ -170,18 +221,18 @@ class InteractivePixCol():
         if self.overFig:
           if self.choosing_color is None:
               self.choosing_color = self.cluster_img[round(event.ydata),round(event.xdata)] - 1
-              self._img.set(data=self._colbox)
+              self._img_plt.set(data=self._colbox)
               self.label_buf = self.label_names[self.choosing_color]
 
           else:
-              new_color = self._img.get_cursor_data(event)
+              new_color = self._img_plt.get_cursor_data(event)
 
               # put in palette
               self.palette[self.choosing_color] = (new_color*256).astype(int).tolist()
               # recolor in image
               self.color_img[self._cluster_mask[self.choosing_color]] = new_color*256
               # show user
-              self._img.set(data=self.color_img)
+              self._img_plt.set(data=self.color_img)
               # reset vars
               self.choosing_color = None
               self.label_buf = None
@@ -197,14 +248,14 @@ class InteractivePixCol():
               self.label_buf = ""
           elif event.key == "escape":
               self.choosing_color = None
-              self._img.set(data=self.color_img)
+              self._img_plt.set(data=self.color_img)
           elif event.key == "backspace":
               self.label_buf = self.label_buf[:-1]
           elif event.key == "enter":
               self.label_names[self.prevGroup] = self.label_buf
               _editing = ""
               self.choosing_color = None
-              self._img.set(data=self._precomp_imgs[self.prevGroup])
+              self._img_plt.set(data=self._precomp_imgs[self.prevGroup])
           elif len(event.key)==1:    
               self.label_buf += event.key
           
@@ -242,6 +293,6 @@ class InteractivePixCol():
       self._recalc_color_img()
       self._do_precomp()
 
-      if self._img:
-        self._img.set(data=self.color_img)
+      if self._img_plt:
+        self._img_plt.set(data=self.color_img)
 
