@@ -28,7 +28,7 @@ def to_ndsp_file(data, labels=None, title="untitled", dimAx=0, afAx=None):
     # get the dimension indices
     axes = list(range(data.ndim))
     
-    # move dimension vals to end
+    # move dimension vals to end   <------------<=
     axes.remove(dimAx)
     axes.append(dimAx)
     
