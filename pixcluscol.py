@@ -40,37 +40,53 @@ class InteractivePixCol():
 
       self.shape = cluster_img.shape
 
-      self._cluster_mask = np.full(
-              (self.num_labels,) + self.shape,
-              False,
-              )
       self.color_img = np.zeros(
               self.shape+(3,),
               dtype=int,
               )
-      self._precomp_imgs = np.zeros(
-              (self.num_labels,) + self.shape+(3,),
-              dtype=int,
-              )
-      self.palette = [[0,0,0],] * self.num_labels
-      self._colbox = None
 
-      # get everything ready !
+      self.palette = [[0,0,0],] * self.num_labels
+      self._init_empty_mask_and_imgs_()
 
       self._make_clus_mask()
-      self._make_colbox()
+      self._do_precomp()
+
+
+      # for interactivity:
+
       self._disable_hotkeys()
 
-      self._do_precomp()
-      
       self._fig, self._ax, self._img, self._txt = (None,)*4
+      self._colbox = None
+      self._make_colbox()
 
-      # vars for interactivity:
       self.prevGroup = None
       self.choosing_color = None
       self.label_buf = None
       self.overFig = False
 
+  def _init_empty_mask_and_imgs_(self):
+
+      self._cluster_mask = np.full(
+              (self.num_labels,) + self.shape,
+              False,
+              )
+      self._precomp_imgs = np.zeros(
+              (self.num_labels,) + self.shape+(3,),
+              dtype=int,
+              )
+
+
+  def _make_clus_mask(self):
+      for i in self.label_indices:
+        self._cluster_mask[i] = ( 1+i == self.cluster_img )
+
+  def _do_precomp(self):
+      for i in self.label_indices:
+        self._precomp_imgs[i] = self.color_img//2+32
+
+        self._precomp_imgs[i][self._cluster_mask[i]] = [200,200,200]
+        #self._precomp_imgs[i][self._cluster_mask[i]] = [223,223,223]
 
   def _disable_hotkeys(self):
 
@@ -98,17 +114,6 @@ class InteractivePixCol():
 
       self._colbox = colbox
       
-  def _make_clus_mask(self):
-      for i in self.label_indices:
-        self._cluster_mask[i] = ( 1+i == self.cluster_img )
-
-  def _do_precomp(self):
-      for i in self.label_indices:
-        self._precomp_imgs[i] = self.color_img//2+32
-
-        self._precomp_imgs[i][self._cluster_mask[i]] = [200,200,200]
-        #self._precomp_imgs[i][self._cluster_mask[i]] = [223,223,223]
-
   def _recalc_color_img(self):
       for i in self.label_indices:
           self.color_img[self._cluster_mask[i]] = self.palette[i]
@@ -228,7 +233,15 @@ class InteractivePixCol():
       self.label_names = l
       self.cluster_img = np.array(ci).reshape(self.shape) + 1 # plus 1 to one indexing
 
+      self.num_labels = self.cluster_img.max()
+      self.label_indices = tuple(range(self.num_labels))
+
+      self._init_empty_mask_and_imgs_()
+
+      self._make_clus_mask()
       self._recalc_color_img()
-      self._img.set(data=self.color_img)
       self._do_precomp()
+
+      if self._img:
+        self._img.set(data=self.color_img)
 
